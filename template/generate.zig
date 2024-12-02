@@ -14,7 +14,7 @@ fn instantiateTemplate(template: []const u8, day: u32) ![]const u8 {
     var rest: []const u8 = template;
     while (std.mem.indexOfScalar(u8, rest, '$')) |index| {
         try list.appendSlice(rest[0..index]);
-        try std.fmt.format(list.writer(), "{d:0>2}", .{day});
+        try std.fmt.format(list.writer(), "{d:0}", .{day});
         rest = rest[index + 1 ..];
     }
     try list.appendSlice(rest);
@@ -58,7 +58,7 @@ pub fn main() !void {
     var updated_hashes = false;
     var day: u32 = 1;
     while (day <= 25) : (day += 1) {
-        const filename = try std.fmt.allocPrint(gpa.allocator(), "src/day{d:0>2}.zig", .{day});
+        const filename = try std.fmt.allocPrint(gpa.allocator(), "src/day{d:0}.zig", .{day});
         defer gpa.allocator().free(filename);
 
         var new_file = false;
