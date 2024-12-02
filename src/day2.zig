@@ -42,27 +42,63 @@ pub fn parse(input: Str) !?Parsed {
 const Output = i64;
 
 pub fn part1(input: Str) !?Output {
-    _ = input;
-    return null;
+    return solve(input, 0);
 }
 
 pub fn part2(input: Str) !?Output {
-    _ = input;
-    return null;
+    return solve(input, u.math.maxInt(usize));
+}
+
+fn solve(input: Str, max_tries: usize) !?Output {
+    const reports = try u.linesOf([]i32, input);
+    var safe: Output = 0;
+    for (reports) |r| {
+        const tries = @min(r.len, max_tries) + 1;
+        const is_safe = safe: for (0..tries) |bad| {
+            if (bad >= 2) {
+                if (bad >= 3) std.mem.rotate(i32, r[0 .. bad - 1], 1);
+                std.mem.rotate(i32, r[0..bad], bad - 1);
+            }
+
+            var windows = u.mem.window(i32, r[@min(1, bad)..], 2, 1);
+            var dir: i32 = 0;
+            var idx: usize = 0;
+            while (windows.next()) |w| : (idx += 1) {
+                const this_diff = w[1] - w[0];
+                const this_dir = u.math.sign(this_diff);
+
+                if ((dir != 0 and this_dir != dir) or // direction differs
+                    this_dir == 0 or // no increase or decrease at the beginning
+                    (@abs(this_diff) -% 1) > 2 // diff too large
+                ) {
+                    break;
+                }
+
+                dir = this_dir;
+            } else break :safe true;
+        } else break :safe false;
+
+        safe += @intFromBool(is_safe);
+    }
+    return safe;
 }
 
 test "day2 example" {
     const input =
-        \\
+        \\7 6 4 2 1
+        \\1 2 7 8 9
+        \\9 7 6 2 1
+        \\1 3 2 4 5
+        \\8 6 4 4 1
+        \\1 3 6 7 9
+        \\8 9 7 6 5
     ;
 
-    try std.testing.expectEqual(null, try part1(input));
-    try std.testing.expectEqual(null, try part2(input));
+    try std.testing.expectEqual(2, try part1(input));
+    try std.testing.expectEqual(5, try part2(input));
 }
 
 test "day2 input" {
-    // uncomment to test with actual input when ready
-
-    // try std.testing.expectEqual( , try part1(day_input) );
-    // try std.testing.expectEqual( , try part2(day_input) );
+    try std.testing.expectEqual(390, try part1(day_input));
+    try std.testing.expectEqual(439, try part2(day_input));
 }
