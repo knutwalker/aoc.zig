@@ -1,46 +1,68 @@
-const std = @import("std");
-const Allocator = std.mem.Allocator;
-const List = std.ArrayList;
-const Map = std.AutoHashMap;
-const StrMap = std.StringHashMap;
-const BitSet = std.DynamicBitSet;
+pub const std = @import("std");
+pub const Alloc = std.mem.Allocator;
+pub const List = std.ArrayList;
+pub const MultiList = std.MultiArrayList;
+pub const Map = std.AutoHashMap;
+pub const StrMap = std.StringHashMap;
+pub const BitSet = std.DynamicBitSet;
+pub const Str = []const u8;
 
-const util = @import("util.zig");
-const gpa = util.gpa;
+const u = @import("util.zig");
+const a = u.gpa;
 
-const data = @embedFile("data/day23.txt");
+const day_input = @embedFile("data/day23.txt");
 
 pub fn main() !void {
-    
+    var results = std.BoundedArray(Output, 2){};
+
+    var measure = u.Measure.start();
+    defer measure.dump();
+
+    if (try part1(day_input)) |p1| {
+        results.append(p1) catch unreachable;
+        measure.lap("part 1");
+    }
+
+    if (try part2(day_input)) |p2| {
+        results.append(p2) catch unreachable;
+        measure.lap("part 2");
+    }
+
+    for (results.constSlice()) |res| {
+        std.io.getStdOut().writer().print("{}\n", .{res}) catch {};
+    }
 }
 
-// Useful stdlib functions
-const tokenizeAny = std.mem.tokenizeAny;
-const tokenizeSeq = std.mem.tokenizeSequence;
-const tokenizeSca = std.mem.tokenizeScalar;
-const splitAny = std.mem.splitAny;
-const splitSeq = std.mem.splitSequence;
-const splitSca = std.mem.splitScalar;
-const indexOf = std.mem.indexOfScalar;
-const indexOfAny = std.mem.indexOfAny;
-const indexOfStr = std.mem.indexOfPosLinear;
-const lastIndexOf = std.mem.lastIndexOfScalar;
-const lastIndexOfAny = std.mem.lastIndexOfAny;
-const lastIndexOfStr = std.mem.lastIndexOfLinear;
-const trim = std.mem.trim;
-const sliceMin = std.mem.min;
-const sliceMax = std.mem.max;
+const Parsed = Str;
 
-const parseInt = std.fmt.parseInt;
-const parseFloat = std.fmt.parseFloat;
+pub fn parse(input: Str) !?Parsed {
+    return input;
+}
 
-const print = std.debug.print;
-const assert = std.debug.assert;
+const Output = i64;
 
-const sort = std.sort.block;
-const asc = std.sort.asc;
-const desc = std.sort.desc;
+pub fn part1(input: Str) !?Output {
+    _ = input;
+    return null;
+}
 
-// Generated from template/template.zig.
-// Run `zig build generate` to update.
-// Only unmodified days will be updated.
+pub fn part2(input: Str) !?Output {
+    _ = input;
+    return null;
+}
+
+test "day23 example" {
+    const input =
+        \\
+    ;
+
+    try std.testing.expectEqual(null, try part1(input));
+    try std.testing.expectEqual(null, try part2(input));
+}
+
+test "day23 input" {
+    // uncomment to test with actual input when ready
+
+    // try std.testing.expectEqual( , try part1(day_input) );
+    // try std.testing.expectEqual( , try part2(day_input) );
+}
