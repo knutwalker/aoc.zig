@@ -33,36 +33,60 @@ pub fn main() !void {
     }
 }
 
-const Parsed = Str;
+const Parsed = struct { []u32, []u32 };
 
 pub fn parse(input: Str) !?Parsed {
-    return input;
+    return try u.columnsOf(struct { u32, u32 }, input);
 }
 
 const Output = i64;
 
 pub fn part1(input: Str) !?Output {
-    _ = input;
-    return null;
+    const left, const right = try parse(input) orelse return null;
+
+    u.sortAsc(left);
+    u.sortAsc(right);
+
+    var sum: Output = 0;
+    for (left, right) |l, r| {
+        sum += u.absDiff(l, r);
+    }
+
+    return sum;
 }
 
 pub fn part2(input: Str) !?Output {
-    _ = input;
-    return null;
+    const left, const right = try parse(input) orelse return null;
+
+    var right_counts = Map(u32, u32).init(a);
+    for (right) |r| {
+        (try right_counts.getOrPutValue(r, 0)).value_ptr.* += 1;
+    }
+
+    var score: Output = 0;
+    for (left) |l| {
+        const count = right_counts.get(l) orelse 0;
+        score += (l * count);
+    }
+
+    return score;
 }
 
 test "day1 example" {
     const input =
-        \\
+        \\3   4
+        \\4   3
+        \\2   5
+        \\1   3
+        \\3   9
+        \\3   3
     ;
 
-    try std.testing.expectEqual(null, try part1(input));
-    try std.testing.expectEqual(null, try part2(input));
+    try std.testing.expectEqual(11, try part1(input));
+    try std.testing.expectEqual(31, try part2(input));
 }
 
 test "day1 input" {
-    // uncomment to test with actual input when ready
-
-    // try std.testing.expectEqual( , try part1(day_input) );
-    // try std.testing.expectEqual( , try part2(day_input) );
+    try std.testing.expectEqual(1646452, try part1(day_input));
+    try std.testing.expectEqual(23609874, try part2(day_input));
 }
