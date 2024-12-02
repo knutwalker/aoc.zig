@@ -23,6 +23,10 @@ pub fn build(b: *Build) void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardOptimizeOption(.{});
 
+    const bench = b.option(bool, "bench", "Print internal benchmarking information [default: false].");
+    const build_opts = b.addOptions();
+    build_opts.addOption(bool, "bench", bench orelse false);
+
     const install_all = b.step("install_all", "Install all days");
     const run_all = b.step("run_all", "Run all days");
 
@@ -51,6 +55,7 @@ pub fn build(b: *Build) void {
             .optimize = mode,
         });
         linkObject(b, exe);
+        exe.root_module.addOptions("opts", build_opts);
 
         const install_cmd = b.addInstallArtifact(exe, .{});
 
