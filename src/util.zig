@@ -7,11 +7,12 @@ pub const StrMap = std.StringHashMap;
 pub const BitSet = std.DynamicBitSet;
 pub const Str = []const u8;
 
-pub const mem = std.mem;
 pub const ascii = std.ascii;
-pub const sortm = std.sort;
 pub const math = std.math;
+pub const mem = std.mem;
+pub const meta = std.meta;
 pub const rand = std.rand;
+pub const sortm = std.sort;
 
 var gpa_impl = std.heap.ArenaAllocator.init(std.heap.page_allocator);
 pub const gpa = gpa_impl.allocator();
@@ -44,16 +45,56 @@ pub const desc = std.sort.desc;
 
 pub const ws = std.ascii.whitespace;
 
+pub fn eql(lhs: Str, rhs: Str) bool {
+    return mem.eql(u8, lhs, rhs);
+}
+
 pub fn strip(str: Str) Str {
     return trim(u8, str, &ws);
 }
 
+pub fn stripPrefix(needle: Str, haystack: Str) ?Str {
+    if (!mem.startsWith(u8, haystack, needle)) return null;
+    return haystack[needle.len..];
+}
+
+pub fn splitAtNext(needle: Str, haystack: Str) ?struct { Str, Str } {
+    const pos = mem.indexOf(u8, haystack, needle) orelse return null;
+    return .{ haystack[0..pos], haystack[pos + needle.len ..] };
+}
+
+pub fn skipToNext(needle: Str, haystack: Str) ?Str {
+    _, const suffix = splitAtNext(needle, haystack) orelse return null;
+    return suffix;
+}
+
+pub fn offsetFrom(base: Str, str: Str) usize {
+    return @intFromPtr(str.ptr) - @intFromPtr(base.ptr);
+}
+
+pub fn advanceTo(tokens: anytype, str: Str) void {
+    tokens.index = offsetFrom(tokens.buffer, str);
+}
+
+pub fn advanceWith(tokens: anytype, op: anytype, needle: Str) @typeInfo(@TypeOf(op)).Fn.return_type.? {
+    const res = op(needle, tokens.rest()) orelse return null;
+    switch (@TypeOf(res)) {
+        Str => advanceTo(tokens, res),
+        else => advanceTo(tokens, res[1]),
+    }
+    return res;
+}
+
 pub fn linesOf(comptime T: type, str: Str) ParseError![]T {
+    return linesOfSep(T, str, Separator.default);
+}
+
+pub fn linesOfSep(comptime T: type, str: Str, comptime sep: Separator) ParseError![]T {
     var items = List(T).init(gpa);
 
     var ls = lines(str);
     while (ls.next()) |line| {
-        const item = try tryParse(T, line);
+        const item = try tryParseSep(T, line, sep);
         items.append(item) catch @panic("oom");
     }
 
@@ -61,6 +102,10 @@ pub fn linesOf(comptime T: type, str: Str) ParseError![]T {
 }
 
 pub fn chunksOf(comptime T: type, str: Str) ParseError![][]T {
+    return chunksOfSep(T, str, Separator.default);
+}
+
+pub fn chunksOfSep(comptime T: type, str: Str, comptime sep: Separator) ParseError![][]T {
     var items = List([]T).init(gpa);
 
     var cs = chunks(str);
@@ -69,7 +114,7 @@ pub fn chunksOf(comptime T: type, str: Str) ParseError![][]T {
 
         var ls = lines(chunk);
         while (ls.next()) |line| {
-            const item = try tryParse(T, line);
+            const item = try tryParseSep(T, line, sep);
             inner.append(item) catch @panic("oom");
         }
 
@@ -80,11 +125,15 @@ pub fn chunksOf(comptime T: type, str: Str) ParseError![][]T {
 }
 
 pub fn columnsOf(comptime T: type, str: Str) ParseError!ColumnsOf(T) {
+    return columnsOfSep(T, str, Separator.default);
+}
+
+pub fn columnsOfSep(comptime T: type, str: Str, comptime sep: Separator) ParseError!ColumnsOf(T) {
     var mla = MultiList(T){};
 
     var ls = lines(str);
     while (ls.next()) |line| {
-        const item = try tryParse(T, line);
+        const item = try tryParseSep(T, line, sep);
         mla.append(gpa, item) catch @panic("oom");
     }
 
@@ -123,11 +172,11 @@ pub fn ColumnsOf(comptime T: type) type {
     return @Type(.{ .Struct = col_type });
 }
 
-pub fn lines(str: Str) std.mem.TokenIterator(u8, .scalar) {
+pub fn lines(str: Str) mem.TokenIterator(u8, .scalar) {
     return tokenizeSca(u8, str, '\n');
 }
 
-pub fn chunks(str: Str) std.mem.TokenIterator(u8, .sequence) {
+pub fn chunks(str: Str) mem.TokenIterator(u8, .sequence) {
     return tokenizeSeq(u8, str, "\n\n");
 }
 
@@ -164,26 +213,24 @@ pub fn parseEnum(comptime E: type, str: Str) error{Enum}!E {
     return std.meta.stringToEnum(E, str) orelse error.Enum;
 }
 
-pub const Separator = union(std.mem.DelimiterType) {
+pub const Separator = union(mem.DelimiterType) {
     sequence: []const u8,
     any: []const u8,
     scalar: u8,
+
+    const default: Separator = .{ .any = ", " };
 
     pub fn tokenize(
         comptime self: Separator,
         comptime T: type,
         str: Str,
-    ) std.mem.TokenIterator(T, self) {
+    ) mem.TokenIterator(T, self) {
         switch (self) {
-            .sequence => |seq| return std.mem.tokenizeSequence(T, str, seq),
-            .any => |any| return std.mem.tokenizeAny(T, str, any),
-            .scalar => |scalar| return std.mem.tokenizeScalar(T, str, scalar),
+            .sequence => |seq| return mem.tokenizeSequence(T, str, seq),
+            .any => |any| return mem.tokenizeAny(T, str, any),
+            .scalar => |scalar| return mem.tokenizeScalar(T, str, scalar),
         }
     }
-};
-
-pub const ParseOpts = struct {
-    separator: Separator = .{ .any = " ," },
 };
 
 pub const ParseError = error{
@@ -194,23 +241,25 @@ pub const ParseError = error{
     Union,
     MissingToken,
     ExtraToken,
+    NoMoreItems,
+    Custom,
 };
 
 pub fn parse(comptime T: type, str: Str) T {
-    return parseOpt(T, str, .{});
+    return parseSep(T, str, Separator.default);
 }
 
-pub fn parseOpt(comptime T: type, str: Str, comptime opts: ParseOpts) T {
-    return tryParseOpt(T, str, opts) catch @panic("parse for expected type " ++ @typeName(T));
+pub fn parseSep(comptime T: type, str: Str, comptime sep: Separator) T {
+    return tryParseSep(T, str, sep) catch @panic("parse for expected type " ++ @typeName(T));
 }
 
 pub fn tryParse(comptime T: type, str: Str) ParseError!T {
-    return tryParseOpt(T, str, .{});
+    return tryParseSep(T, str, Separator.default);
 }
 
-pub fn tryParseOpt(comptime T: type, str: Str, comptime opts: ParseOpts) ParseError!T {
-    var tokens = opts.separator.tokenize(u8, str);
-    const res = try parseTokens(T, opts.separator, &tokens);
+pub fn tryParseSep(comptime T: type, str: Str, comptime sep: Separator) ParseError!T {
+    var tokens = sep.tokenize(u8, str);
+    const res = try parseTokens(T, &tokens);
     if (tokens.next() != null) {
         if (@typeInfo(T) == .Optional and tokens.next() == null) {
             return res;
@@ -220,17 +269,13 @@ pub fn tryParseOpt(comptime T: type, str: Str, comptime opts: ParseOpts) ParseEr
     return res;
 }
 
-pub fn parseTokens(
-    comptime T: type,
-    comptime delim: std.mem.DelimiterType,
-    tokens: *std.mem.TokenIterator(u8, delim),
-) ParseError!T {
+pub fn parseTokens(comptime T: type, tokens: anytype) ParseError!T {
     return switch (@typeInfo(T)) {
         .Void => {},
         .Null => null,
         .Optional => |o| {
             const before = tokens.index;
-            return parseTokens(o.child, delim, tokens) catch {
+            return parseTokens(o.child, tokens) catch {
                 tokens.index = before;
                 return null;
             };
@@ -240,11 +285,11 @@ pub fn parseTokens(
         .Float => parseFloat(T, tokens.next() orelse return error.MissingToken),
         .Enum => parseEnum(T, tokens.next() orelse return error.MissingToken),
         .Union => |u| {
-            const token = tokens.next() orelse return error.MissingToken;
+            const start = tokens.index;
             inline for (u.fields) |f| {
-                if (tryParse(f.type, token)) |val| {
+                if (parseTokens(f.type, tokens)) |val| {
                     return @unionInit(T, f.name, val);
-                } else |_| {}
+                } else |_| tokens.index = start;
             }
             return error.Union;
         },
@@ -252,7 +297,7 @@ pub fn parseTokens(
             var result: T = undefined;
 
             inline for (s.fields) |f| {
-                const field_value = try parseTokens(f.type, delim, tokens);
+                const field_value = try parseTokens(f.type, tokens);
                 @field(result, f.name) = field_value;
             }
 
@@ -262,7 +307,7 @@ pub fn parseTokens(
             var items: [a.len]a.child = undefined;
 
             inline for (0..a.len) |i| {
-                const item = try parseTokens(a.child, delim, tokens);
+                const item = try parseTokens(a.child, tokens);
                 items[i] = item;
             }
 
@@ -276,11 +321,12 @@ pub fn parseTokens(
             } else {
                 var items = List(p.child).init(gpa);
                 var valid_index = tokens.index;
-                while (parseTokens(p.child, delim, tokens)) |token| {
+                while (parseTokens(p.child, tokens)) |token| {
                     valid_index = tokens.index;
                     items.append(token) catch @panic("oom");
-                } else |_| {
-                    tokens.index = valid_index;
+                } else |e| switch (e) {
+                    error.NoMoreItems => {},
+                    else => tokens.index = valid_index,
                 }
                 return items.items;
             }
@@ -342,7 +388,7 @@ test "parseInner" {
     try t.expectEqual(S{ .a = 42, .b = true, .c = 13.37 }, tryParse(S, "42, true, 13.37"));
     try t.expectEqual(S{ .a = 42, .b = null, .c = 13.37 }, tryParse(S, "42, 13.37"));
 
-    const Nested = struct { foo: i32, bar: struct { baz: f32 }, qux: [2]struct { quux: u32 } };
+    const Nested = struct { foo: i32, bar: union(enum) { baz: f32 }, qux: [2]struct { quux: u32 } };
     try t.expectEqual(
         Nested{ .foo = 42, .bar = .{ .baz = 13.37 }, .qux = .{ .{ .quux = 84 }, .{ .quux = 21 } } },
         tryParse(Nested, "42 13.37 84 21"),
@@ -370,22 +416,28 @@ test "parse with opts" {
     const S = struct { foo: i32, bar: f32 };
 
     // defaults
-    try t.expectEqual(S{ .foo = 42, .bar = 13.37 }, tryParseOpt(S, "42 13.37", .{}));
-    try t.expectEqual(S{ .foo = 42, .bar = 13.37 }, tryParseOpt(S, "42,13.37", .{}));
-
     try t.expectEqual(
         S{ .foo = 42, .bar = 13.37 },
-        tryParseOpt(S, "42BC13.37", .{ .separator = .{ .any = "ABC" } }),
+        tryParseSep(S, "42 13.37", Separator.default),
+    );
+    try t.expectEqual(
+        S{ .foo = 42, .bar = 13.37 },
+        tryParseSep(S, "42,13.37", Separator.default),
     );
 
     try t.expectEqual(
         S{ .foo = 42, .bar = 13.37 },
-        tryParseOpt(S, "42 | 13.37", .{ .separator = .{ .sequence = " | " } }),
+        tryParseSep(S, "42BC13.37", .{ .any = "ABC" }),
     );
 
     try t.expectEqual(
         S{ .foo = 42, .bar = 13.37 },
-        tryParseOpt(S, "42&13.37", .{ .separator = .{ .scalar = '&' } }),
+        tryParseSep(S, "42 | 13.37", .{ .sequence = " | " }),
+    );
+
+    try t.expectEqual(
+        S{ .foo = 42, .bar = 13.37 },
+        tryParseSep(S, "42&13.37", .{ .scalar = '&' }),
     );
 }
 
@@ -401,6 +453,7 @@ pub const Measure = struct {
         usage: std.posix.rusage,
         heap: usize,
         wall: u64,
+        size: ?u64,
 
         fn take(label: []const u8, timer: *std.time.Timer) Snap {
             return .{
@@ -408,6 +461,7 @@ pub const Measure = struct {
                 .usage = std.posix.getrusage(std.posix.rusage.SELF),
                 .heap = gpa_impl.queryCapacity(),
                 .wall = timer.read(),
+                .size = null,
             };
         }
 
@@ -443,6 +497,14 @@ pub const Measure = struct {
             const heap = rhs.heap -| lhs.heap;
             const wall_time = rhs.wall -| lhs.wall;
 
+            const thrpt = if (rhs.size) |size| b: {
+                const secs =
+                    @as(f64, @floatFromInt(wall_time)) /
+                    @as(f64, @floatFromInt(std.time.ns_per_s));
+                const tp = @as(f64, @floatFromInt(size)) / secs;
+                break :b @as(u64, @intFromFloat(@round(tp)));
+            } else null;
+
             return .{
                 .label = label orelse rhs.label,
                 .wall_time_ns = wall_time,
@@ -450,6 +512,7 @@ pub const Measure = struct {
                 .system_time_ns = system_time,
                 .heap_bytes = heap,
                 .rss_bytes = rss,
+                .throughput = thrpt,
             };
         }
     };
@@ -461,8 +524,9 @@ pub const Measure = struct {
         system_time_ns: u64,
         heap_bytes: u64,
         rss_bytes: u64,
+        throughput: ?u64,
 
-        const empty = std.mem.zeroes(Usage);
+        const empty = mem.zeroes(Usage);
 
         fn dump(self: *const Usage) void {
             if (comptime do_measure == false) return;
@@ -473,7 +537,10 @@ pub const Measure = struct {
             if (out.isTty()) {
                 out.writer().print("\n{}", .{self}) catch {};
             } else {
-                std.json.stringify(self, .{ .whitespace = .indent_4 }, out.writer()) catch {};
+                std.json.stringify(self, .{
+                    .whitespace = .indent_4,
+                    .emit_null_optional_fields = false,
+                }, out.writer()) catch {};
                 out.writeAll("\n") catch {};
             }
         }
@@ -500,6 +567,15 @@ pub const Measure = struct {
                 std.fmt.fmtIntSizeBin(self.heap_bytes),
                 std.fmt.fmtIntSizeBin(self.rss_bytes),
             });
+
+            if (self.throughput) |t| {
+                try writer.print(
+                    \\     {s: >16.9} throughput (per second)
+                    \\
+                , .{
+                    std.fmt.fmtIntSizeBin(t),
+                });
+            }
         }
     };
 
@@ -516,6 +592,14 @@ pub const Measure = struct {
         if (comptime do_measure == false) return;
 
         const snap = Snap.take(label, &self.timer);
+        self.snapshots.append(snap) catch {};
+    }
+
+    pub fn lapWithSize(self: *Measure, label: []const u8, size: u64) void {
+        if (comptime do_measure == false) return;
+
+        var snap = Snap.take(label, &self.timer);
+        snap.size = size;
         self.snapshots.append(snap) catch {};
     }
 
