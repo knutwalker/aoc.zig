@@ -285,6 +285,10 @@ pub fn parseTokens(comptime T: type, tokens: anytype) ParseError!T {
         .Float => parseFloat(T, tokens.next() orelse return error.MissingToken),
         .Enum => parseEnum(T, tokens.next() orelse return error.MissingToken),
         .Union => |u| {
+            if (@hasDecl(T, "parse")) {
+                return try T.parse(tokens);
+            }
+
             const start = tokens.index;
             inline for (u.fields) |f| {
                 if (parseTokens(f.type, tokens)) |val| {
@@ -294,6 +298,10 @@ pub fn parseTokens(comptime T: type, tokens: anytype) ParseError!T {
             return error.Union;
         },
         .Struct => |s| {
+            if (@hasDecl(T, "parse")) {
+                return try T.parse(tokens);
+            }
+
             var result: T = undefined;
 
             inline for (s.fields) |f| {
@@ -408,6 +416,39 @@ test "parseInner" {
 
     try t.expectEqual(@as(?i32, 42), tryParse(?i32, "42"));
     try t.expectEqual(@as(?i32, null), tryParse(?i32, "foo"));
+}
+
+test "parse with custom parse" {
+    const S = struct {
+        l: u32,
+        r: u32,
+
+        pub fn parse(tokens: anytype) !@This() {
+            _ = advanceWith(tokens, stripPrefix, "foo(") orelse return error.MissingToken;
+            const l, const r = try parseTokens([2]u32, tokens);
+            return .{ .l = l, .r = r };
+        }
+    };
+
+    const s_result = try tryParseSep(S, "foo(42, 1337)", .{ .any = ", )" });
+    try std.testing.expectEqual(S{ .l = 42, .r = 1337 }, s_result);
+
+    const E = union(enum) {
+        l: u32,
+        r: u32,
+
+        pub fn parse(tokens: anytype) !@This() {
+            const tag_str = tokens.next() orelse return error.MissingToken;
+            inline for (meta.fields(@This())) |f| if (eql(tag_str, f.name)) {
+                const value = try parseTokens(f.type, tokens);
+                return @unionInit(@This(), f.name, value);
+            };
+            return error.Custom;
+        }
+    };
+
+    const e_result = try tryParseSep([2]E, "l=42, r=1337", .{ .any = "=, " });
+    try std.testing.expectEqual([_]E{ .{ .l = 42 }, .{ .r = 1337 } }, e_result);
 }
 
 test "parse with opts" {
