@@ -18,12 +18,15 @@ pub fn main() !void {
     var measure = u.Measure.start();
     defer measure.dump();
 
-    if (try part1(day_input)) |p1| {
+    const in = try parse(day_input);
+    measure.lapWithSize("parse", day_input.len);
+
+    if (try part1(in)) |p1| {
         results.append(p1) catch unreachable;
         measure.lap("part 1");
     }
 
-    if (try part2(day_input)) |p2| {
+    if (try part2(in)) |p2| {
         results.append(p2) catch unreachable;
         measure.lap("part 2");
     }
@@ -33,24 +36,23 @@ pub fn main() !void {
     }
 }
 
-const Parsed = Str;
+const Parsed = []const []i32;
 
-pub fn parse(input: Str) !?Parsed {
-    return input;
+pub fn parse(input: Str) !Parsed {
+    return try u.linesOf([]i32, input);
 }
 
 const Output = i64;
 
-pub fn part1(input: Str) !?Output {
+pub fn part1(input: Parsed) !?Output {
     return solve(input, 0);
 }
 
-pub fn part2(input: Str) !?Output {
+pub fn part2(input: Parsed) !?Output {
     return solve(input, u.math.maxInt(usize));
 }
 
-fn solve(input: Str, max_tries: usize) !?Output {
-    const reports = try u.linesOf([]i32, input);
+fn solve(reports: Parsed, max_tries: usize) !?Output {
     var safe: Output = 0;
     for (reports) |r| {
         const tries = @min(r.len, max_tries) + 1;
@@ -94,11 +96,13 @@ test "day2 example" {
         \\8 9 7 6 5
     ;
 
-    try std.testing.expectEqual(2, try part1(input));
-    try std.testing.expectEqual(5, try part2(input));
+    const in = try parse(input);
+    try std.testing.expectEqual(2, try part1(in));
+    try std.testing.expectEqual(5, try part2(in));
 }
 
 test "day2 input" {
-    try std.testing.expectEqual(390, try part1(day_input));
-    try std.testing.expectEqual(439, try part2(day_input));
+    const in = try parse(day_input);
+    try std.testing.expectEqual(390, try part1(in));
+    try std.testing.expectEqual(439, try part2(in));
 }
