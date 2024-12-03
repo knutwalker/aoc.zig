@@ -18,12 +18,15 @@ pub fn main() !void {
     var measure = u.Measure.start();
     defer measure.dump();
 
-    if (try part1(day_input)) |p1| {
+    const in = try parse(day_input);
+    measure.lapWithSize("parse", day_input.len);
+
+    if (try part1(in)) |p1| {
         results.append(p1) catch unreachable;
         measure.lap("part 1");
     }
 
-    if (try part2(day_input)) |p2| {
+    if (try part2(in)) |p2| {
         results.append(p2) catch unreachable;
         measure.lap("part 2");
     }
@@ -35,18 +38,18 @@ pub fn main() !void {
 
 const Parsed = Str;
 
-pub fn parse(input: Str) !?Parsed {
+pub fn parse(input: Str) !Parsed {
     return input;
 }
 
 const Output = i64;
 
-pub fn part1(input: Str) !?Output {
+pub fn part1(input: Parsed) !?Output {
     _ = input;
     return null;
 }
 
-pub fn part2(input: Str) !?Output {
+pub fn part2(input: Parsed) !?Output {
     _ = input;
     return null;
 }
@@ -56,13 +59,15 @@ test "day13 example" {
         \\
     ;
 
-    try std.testing.expectEqual(null, try part1(input));
-    try std.testing.expectEqual(null, try part2(input));
+    const in = try parse(input);
+    try std.testing.expectEqual(null, try part1(in));
+    try std.testing.expectEqual(null, try part2(in));
 }
 
 test "day13 input" {
-    // uncomment to test with actual input when ready
+    if ("remove_this_when_ready".len > 0) return error.SkipZigTest;
 
-    // try std.testing.expectEqual( , try part1(day_input) );
-    // try std.testing.expectEqual( , try part2(day_input) );
+    const in = try parse(day_input);
+    try std.testing.expectEqual(null, try part1(in));
+    try std.testing.expectEqual(null, try part2(in));
 }
