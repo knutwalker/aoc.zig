@@ -67,6 +67,7 @@ pub fn build(b: *Build) void {
         linkObject(b, build_test);
 
         const run_test = b.addRunArtifact(build_test);
+        const install_test_cmd = b.addInstallArtifact(build_test, .{});
 
         {
             const step_key = b.fmt("install_{s}", .{dayString});
@@ -81,6 +82,13 @@ pub fn build(b: *Build) void {
             const step_desc = b.fmt("Run tests in {s}", .{zigFile});
             const step = b.step(step_key, step_desc);
             step.dependOn(&run_test.step);
+        }
+
+        {
+            const step_key = b.fmt("install_test_{s}", .{dayString});
+            const step_desc = b.fmt("Install tests in {s}", .{zigFile});
+            const install_step = b.step(step_key, step_desc);
+            install_step.dependOn(&install_test_cmd.step);
         }
 
         const run_cmd = b.addRunArtifact(exe);
