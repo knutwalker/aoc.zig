@@ -45,6 +45,22 @@ pub const desc = std.sort.desc;
 
 pub const ws = std.ascii.whitespace;
 
+pub fn sortAsc(items: anytype) void {
+    const Inner = @typeInfo(@TypeOf(items)).Pointer.child;
+    sort(Inner, items, {}, asc(Inner));
+}
+
+pub fn absDiff(a: anytype, b: anytype) std.meta.Int(.unsigned, @typeInfo(@TypeOf(a)).Int.bits + 1) {
+    const T = AbsDiff(@TypeOf(a));
+    return @abs(@as(T, a) - @as(T, b));
+}
+
+pub fn AbsDiff(comptime T: type) type {
+    const Int = @typeInfo(T).Int;
+    if (Int.signedness == .signed) return T;
+    return std.meta.Int(.signed, Int.bits + 1);
+}
+
 pub fn eql(lhs: Str, rhs: Str) bool {
     return mem.eql(u8, lhs, rhs);
 }
@@ -83,6 +99,120 @@ pub fn advanceWith(tokens: anytype, op: anytype, needle: Str) @typeInfo(@TypeOf(
         else => advanceTo(tokens, res[1]),
     }
     return res;
+}
+
+pub fn findChars(str: Str, needle: u8) FindChars {
+    return .{ .str = str, .needle = needle, .pos = 0 };
+}
+
+pub const FindChars = struct {
+    str: Str,
+    needle: u8,
+    pos: usize,
+
+    pub fn next(self: *FindChars) ?usize {
+        const pos =
+            mem.indexOfScalarPos(u8, self.str, self.pos, self.needle) orelse
+            return null;
+        self.pos = pos + 1;
+        return pos;
+    }
+};
+
+pub const Axis = enum { x, y };
+pub const Dir = enum(i2) { forward = 1, backward = -1 };
+pub const Kind = enum { straight, diagonal };
+
+pub const LineConfig = struct {
+    kind: Kind,
+    axis: Axis,
+    dir: Dir,
+};
+
+pub const LineOpts = struct {
+    kind: ?Kind = null,
+    axis: ?Axis = null,
+    dir: ?Dir = null,
+
+    fn combinations(comptime self: LineOpts) comptime_int {
+        return (if (self.kind == null) meta.fields(Kind).len else 1) *
+            (if (self.axis == null) meta.fields(Axis).len else 1) *
+            (if (self.dir == null) meta.fields(Dir).len else 1);
+    }
+};
+
+pub const StrGrid = Grid(u8);
+
+pub fn Grid(comptime T: type) type {
+    return struct {
+        input: []const T,
+        row_len: isize,
+
+        const Self = @This();
+
+        pub fn lines(
+            self: *const Self,
+            start: usize,
+            comptime filter: LineOpts,
+        ) [filter.combinations()]Chars {
+            const kinds = comptime if (filter.kind) |k| &.{k} else meta.tags(Kind);
+            const axis = comptime if (filter.axis) |a| &.{a} else meta.tags(Axis);
+            const dir = comptime if (filter.dir) |d| &.{d} else meta.tags(Dir);
+            var buf: [filter.combinations()]Chars = undefined;
+            var idx: usize = 0;
+            inline for (kinds) |k| inline for (axis) |a| inline for (dir) |d| {
+                buf[idx] = self.chars(start, k, a, d);
+                idx += 1;
+            };
+            return buf;
+        }
+
+        pub fn chars(self: *const Self, start: usize, kind: Kind, axis: Axis, dir: Dir) Chars {
+            const d = @intFromEnum(dir);
+            const stride = switch (kind) {
+                .straight => switch (axis) {
+                    .x => d,
+                    .y => d * self.row_len,
+                },
+                .diagonal => switch (axis) {
+                    .x => d * (self.row_len + 1),
+                    .y => -d * (self.row_len - 1),
+                },
+            };
+            return .{
+                .grid = self,
+                .pos = start,
+                .stride = stride,
+                .config = .{ .kind = kind, .axis = axis, .dir = dir },
+            };
+        }
+
+        pub const Chars = struct {
+            grid: *const Self,
+            pos: usize,
+            stride: isize,
+            config: LineConfig,
+
+            pub fn next(self: *Chars) ?T {
+                const ipos = @as(isize, @intCast(self.pos)) + self.stride;
+                const new_pos = math.cast(usize, ipos) orelse return null;
+                if (new_pos >= self.grid.input.len) return null;
+                const row_len = @as(usize, @intCast(self.grid.row_len));
+                if (new_pos % (row_len) == row_len - 1) return null;
+                self.pos = new_pos;
+                return self.grid.input[new_pos];
+            }
+
+            pub fn match(self: *Chars, target: []const T) bool {
+                var idx: usize = 0;
+                while (self.next()) |c| : (idx += 1) {
+                    if (c != target[idx]) break;
+                    if (idx == target.len - 1) return true;
+                }
+                return false;
+            }
+        };
+    };
 }
 
 pub fn linesOf(comptime T: type, str: Str) ParseError![]T {
@@ -178,22 +308,6 @@ pub fn lines(str: Str) mem.TokenIterator(u8, .scalar) {
 
 pub fn chunks(str: Str) mem.TokenIterator(u8, .sequence) {
     return tokenizeSeq(u8, str, "\n\n");
-}
-
-pub fn sortAsc(items: anytype) void {
-    const Inner = @typeInfo(@TypeOf(items)).Pointer.child;
-    sort(Inner, items, {}, asc(Inner));
-}
-
-pub fn absDiff(a: anytype, b: anytype) std.meta.Int(.unsigned, @typeInfo(@TypeOf(a)).Int.bits + 1) {
-    const T = AbsDiff(@TypeOf(a));
-    return @abs(@as(T, a) - @as(T, b));
-}
-
-pub fn AbsDiff(comptime T: type) type {
-    const Int = @typeInfo(T).Int;
-    if (Int.signedness == .signed) return T;
-    return std.meta.Int(.signed, Int.bits + 1);
 }
 
 pub fn parseBool(str: Str) error{Bool}!bool {
