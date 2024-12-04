@@ -47,8 +47,8 @@ const Output = i64;
 pub fn part1(input: Parsed) !?Output {
     const left, const right = input;
 
-    u.sortAsc(left);
-    u.sortAsc(right);
+    u.mem.sortUnstable(u32, left, {}, u.asc(u32));
+    u.mem.sortUnstable(u32, right, {}, u.asc(u32));
 
     var sum: Output = 0;
     for (left, right) |l, r| {
