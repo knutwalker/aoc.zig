@@ -596,178 +596,196 @@ test "parse with opts" {
     );
 }
 
-pub const Measure = struct {
-    timer: std.time.Timer,
-    snapshots: std.BoundedArray(Snap, 4),
+// parse + part1 + part2
+pub const Measure = BoundedMeasure(3);
 
-    const empty = Measure{ .timer = undefined, .snapshots = undefined };
-    const do_measure = @import("opts").bench;
+pub fn BoundedMeasure(max_snapshots: comptime_int) type {
+    return struct {
+        active: bool,
+        timer: std.time.Timer,
+        snapshots: std.BoundedArray(Snap, max_snapshots + 1),
 
-    const Snap = struct {
-        label: []const u8,
-        usage: std.posix.rusage,
-        heap: usize,
-        wall: u64,
-        size: ?u64,
+        const empty = Self{ .timer = undefined, .snapshots = undefined, .active = false };
+        const do_measure = @import("opts").bench;
+        const should_measure = if (@hasDecl(@import("root"), "disable_sub_measure")) false else do_measure;
 
-        fn take(label: []const u8, timer: *std.time.Timer) Snap {
-            return .{
-                .label = label,
-                .usage = std.posix.getrusage(std.posix.rusage.SELF),
-                .heap = gpa_impl.queryCapacity(),
-                .wall = timer.read(),
-                .size = null,
-            };
-        }
+        const Self = @This();
 
-        fn diff(lhs: Snap, rhs: Snap, label: ?[]const u8) Usage {
-            const user_time = utime: {
-                var after: u64 = @intCast(rhs.usage.utime.tv_sec);
-                after *|= std.time.us_per_s;
-                after +|= @intCast(rhs.usage.utime.tv_usec);
+        const Snap = struct {
+            label: []const u8,
+            usage: std.posix.rusage,
+            heap: usize,
+            wall: u64,
+            size: ?u64,
 
-                var before: u64 = @intCast(lhs.usage.utime.tv_sec);
-                before *|= std.time.us_per_s;
-                before +|= @intCast(lhs.usage.utime.tv_usec);
-
-                break :utime (after -| before) *| std.time.ns_per_us;
-            };
-
-            const system_time = stime: {
-                var after: u64 = @intCast(rhs.usage.stime.tv_sec);
-                after *|= std.time.us_per_s;
-                after +|= @intCast(rhs.usage.stime.tv_usec);
-
-                var before: u64 = @intCast(lhs.usage.stime.tv_sec);
-                before *|= std.time.us_per_s;
-                before +|= @intCast(lhs.usage.stime.tv_usec);
-
-                break :stime (after -| before) *| std.time.ns_per_us;
-            };
-
-            const rss =
-                @as(u64, @intCast(rhs.usage.maxrss)) -|
-                @as(u64, @intCast(lhs.usage.maxrss));
-
-            const heap = rhs.heap -| lhs.heap;
-            const wall_time = rhs.wall -| lhs.wall;
-
-            const thrpt = if (rhs.size) |size| b: {
-                const secs =
-                    @as(f64, @floatFromInt(wall_time)) /
-                    @as(f64, @floatFromInt(std.time.ns_per_s));
-                const tp = @as(f64, @floatFromInt(size)) / secs;
-                break :b @as(u64, @intFromFloat(@round(tp)));
-            } else null;
-
-            return .{
-                .label = label orelse rhs.label,
-                .wall_time_ns = wall_time,
-                .user_time_ns = user_time,
-                .system_time_ns = system_time,
-                .heap_bytes = heap,
-                .rss_bytes = rss,
-                .throughput = thrpt,
-            };
-        }
-    };
-
-    const Usage = struct {
-        label: []const u8,
-        wall_time_ns: u64,
-        user_time_ns: u64,
-        system_time_ns: u64,
-        heap_bytes: u64,
-        rss_bytes: u64,
-        throughput: ?u64,
-
-        const empty = mem.zeroes(Usage);
-
-        fn dump(self: *const Usage) void {
-            if (comptime do_measure == false) return;
-
-            std.debug.lockStdErr();
-            defer std.debug.unlockStdErr();
-            const out = std.io.getStdErr();
-            if (out.isTty()) {
-                out.writer().print("\n{}", .{self}) catch {};
-            } else {
-                std.json.stringify(self, .{
-                    .whitespace = .indent_4,
-                    .emit_null_optional_fields = false,
-                }, out.writer()) catch {};
-                out.writeAll("\n") catch {};
+            fn take(label: []const u8, timer: *std.time.Timer) Snap {
+                return .{
+                    .label = label,
+                    .usage = std.posix.getrusage(std.posix.rusage.SELF),
+                    .heap = gpa_impl.queryCapacity(),
+                    .wall = timer.read(),
+                    .size = null,
+                };
             }
-        }
 
-        pub fn format(
-            self: *const Usage,
-            comptime _: []const u8,
-            _: std.fmt.FormatOptions,
-            writer: anytype,
-        ) !void {
-            try writer.print(
-                \\Usage for {s}:
-                \\     {s: >16} wall time
-                \\     {s: >16} user time
-                \\     {s: >16} system time
-                \\     {s: >16.9} heap memory usage
-                \\     {s: >16.9} resident memory usage
-                \\
-            , .{
-                self.label,
-                std.fmt.fmtDuration(self.wall_time_ns),
-                std.fmt.fmtDuration(self.user_time_ns),
-                std.fmt.fmtDuration(self.system_time_ns),
-                std.fmt.fmtIntSizeBin(self.heap_bytes),
-                std.fmt.fmtIntSizeBin(self.rss_bytes),
-            });
+            fn diff(lhs: Snap, rhs: Snap, label: ?[]const u8) Usage {
+                const user_time = utime: {
+                    var after: u64 = @intCast(rhs.usage.utime.tv_sec);
+                    after *|= std.time.us_per_s;
+                    after +|= @intCast(rhs.usage.utime.tv_usec);
 
-            if (self.throughput) |t| {
+                    var before: u64 = @intCast(lhs.usage.utime.tv_sec);
+                    before *|= std.time.us_per_s;
+                    before +|= @intCast(lhs.usage.utime.tv_usec);
+
+                    break :utime (after -| before) *| std.time.ns_per_us;
+                };
+
+                const system_time = stime: {
+                    var after: u64 = @intCast(rhs.usage.stime.tv_sec);
+                    after *|= std.time.us_per_s;
+                    after +|= @intCast(rhs.usage.stime.tv_usec);
+
+                    var before: u64 = @intCast(lhs.usage.stime.tv_sec);
+                    before *|= std.time.us_per_s;
+                    before +|= @intCast(lhs.usage.stime.tv_usec);
+
+                    break :stime (after -| before) *| std.time.ns_per_us;
+                };
+
+                const rss =
+                    @as(u64, @intCast(rhs.usage.maxrss)) -|
+                    @as(u64, @intCast(lhs.usage.maxrss));
+
+                const heap = rhs.heap -| lhs.heap;
+                const wall_time = rhs.wall -| lhs.wall;
+
+                const thrpt = if (rhs.size) |size| b: {
+                    const secs =
+                        @as(f64, @floatFromInt(wall_time)) /
+                        @as(f64, @floatFromInt(std.time.ns_per_s));
+                    const tp = @as(f64, @floatFromInt(size)) / secs;
+                    break :b @as(u64, @intFromFloat(@round(tp)));
+                } else null;
+
+                return .{
+                    .label = label orelse rhs.label,
+                    .wall_time_ns = wall_time,
+                    .user_time_ns = user_time,
+                    .system_time_ns = system_time,
+                    .heap_bytes = heap,
+                    .rss_bytes = rss,
+                    .throughput = thrpt,
+                };
+            }
+        };
+
+        const Usage = struct {
+            label: []const u8,
+            wall_time_ns: u64,
+            user_time_ns: u64,
+            system_time_ns: u64,
+            heap_bytes: u64,
+            rss_bytes: u64,
+            throughput: ?u64,
+
+            const empty = mem.zeroes(Usage);
+
+            fn dump(self: *const Usage) void {
+                if (comptime do_measure == false) return;
+
+                std.debug.lockStdErr();
+                defer std.debug.unlockStdErr();
+                const out = std.io.getStdErr();
+                if (out.isTty()) {
+                    out.writer().print("\n{}", .{self}) catch {};
+                } else {
+                    std.json.stringify(self, .{
+                        .whitespace = .indent_4,
+                        .emit_null_optional_fields = false,
+                    }, out.writer()) catch {};
+                    out.writeAll("\n") catch {};
+                }
+            }
+
+            pub fn format(
+                self: *const Usage,
+                comptime _: []const u8,
+                _: std.fmt.FormatOptions,
+                writer: anytype,
+            ) !void {
                 try writer.print(
-                    \\     {s: >16.9} throughput (per second)
+                    \\Usage for {s}:
+                    \\     {s: >16} wall time
+                    \\     {s: >16} user time
+                    \\     {s: >16} system time
+                    \\     {s: >16.9} heap memory usage
+                    \\     {s: >16.9} resident memory usage
                     \\
                 , .{
-                    std.fmt.fmtIntSizeBin(t),
+                    self.label,
+                    std.fmt.fmtDuration(self.wall_time_ns),
+                    std.fmt.fmtDuration(self.user_time_ns),
+                    std.fmt.fmtDuration(self.system_time_ns),
+                    std.fmt.fmtIntSizeBin(self.heap_bytes),
+                    std.fmt.fmtIntSizeBin(self.rss_bytes),
                 });
+
+                if (self.throughput) |t| {
+                    try writer.print(
+                        \\     {s: >16.9} throughput (per second)
+                        \\
+                    , .{
+                        std.fmt.fmtIntSizeBin(t),
+                    });
+                }
             }
+        };
+
+        pub inline fn forceStart() Self {
+            return startInternal(true);
+        }
+
+        pub inline fn start() Self {
+            return startInternal(should_measure);
+        }
+
+        fn startInternal(comptime enable_measure: bool) Self {
+            if (comptime do_measure == false) return empty;
+            if (comptime enable_measure == false) return empty;
+
+            const timer = std.time.Timer.start() catch unreachable;
+            var this = Self{ .timer = timer, .snapshots = .{}, .active = true };
+            this.lap("start");
+            return this;
+        }
+
+        pub fn lap(self: *Self, label: []const u8) void {
+            if (self.active == false) return;
+
+            const snap = Snap.take(label, &self.timer);
+            self.snapshots.append(snap) catch {};
+        }
+
+        pub fn lapWithSize(self: *Self, label: []const u8, size: u64) void {
+            if (self.active == false) return;
+
+            var snap = Snap.take(label, &self.timer);
+            snap.size = size;
+            self.snapshots.append(snap) catch {};
+        }
+
+        pub fn dump(self: *Self) void {
+            if (self.active == false) return;
+
+            const snaps = self.snapshots.constSlice();
+            if (snaps.len < 2) return;
+
+            var segments = mem.window(Snap, snaps, 2, 1);
+            while (segments.next()) |segment| {
+                segment[0].diff(segment[1], null).dump();
+            }
+            snaps[0].diff(snaps[snaps.len - 1], "everything").dump();
         }
     };
-
-    pub fn start() Measure {
-        if (comptime do_measure == false) return empty;
-
-        const timer = std.time.Timer.start() catch unreachable;
-        var this = Measure{ .timer = timer, .snapshots = .{} };
-        this.lap("start");
-        return this;
-    }
-
-    pub fn lap(self: *Measure, label: []const u8) void {
-        if (comptime do_measure == false) return;
-
-        const snap = Snap.take(label, &self.timer);
-        self.snapshots.append(snap) catch {};
-    }
-
-    pub fn lapWithSize(self: *Measure, label: []const u8, size: u64) void {
-        if (comptime do_measure == false) return;
-
-        var snap = Snap.take(label, &self.timer);
-        snap.size = size;
-        self.snapshots.append(snap) catch {};
-    }
-
-    pub fn dump(self: *Measure) void {
-        if (comptime do_measure == false) return;
-
-        const snaps = self.snapshots.constSlice();
-        if (snaps.len < 2) return;
-
-        var segments = mem.window(Snap, snaps, 2, 1);
-        while (segments.next()) |segment| {
-            segment[0].diff(segment[1], null).dump();
-        }
-        snaps[0].diff(snaps[snaps.len - 1], "everything").dump();
-    }
-};
+}

@@ -43,10 +43,17 @@ pub fn build(b: *Build) void {
     generate.dependOn(&run_generate.step);
 
     // Set up an exe for each day
+    var has_day: [26]bool = undefined;
     var day: u32 = 1;
     while (day <= 25) : (day += 1) {
         const dayString = b.fmt("day{:0}", .{day});
         const zigFile = b.fmt("src/{s}.zig", .{dayString});
+
+        const inputFileName = b.fmt("src/data/{s}.txt", .{dayString});
+        const inputFile = b.path(inputFileName);
+        const inputFilePath = inputFile.getPath(b);
+        const hasInputFile = if (std.fs.accessAbsolute(inputFilePath, .{})) true else |_| false;
+        has_day[day] = hasInputFile;
 
         const exe = b.addExecutable(.{
             .name = dayString,
@@ -99,7 +106,6 @@ pub fn build(b: *Build) void {
         const run_desc = b.fmt("Run {s}", .{dayString});
         const run_step = b.step(dayString, run_desc);
         run_step.dependOn(&run_cmd.step);
-        run_all.dependOn(&run_cmd.step);
     }
 
     // Set up tests for util.zig
@@ -123,4 +129,22 @@ pub fn build(b: *Build) void {
     });
     const run_all_tests = b.addRunArtifact(all_tests);
     test_all.dependOn(&run_all_tests.step);
+
+    const all_days = b.addExecutable(.{
+        .name = "run_all",
+        .root_source_file = b.path("src/run_all.zig"),
+        .target = target,
+        .optimize = mode,
+    });
+    build_opts.addOption([26]bool, "has_input", has_day);
+    all_days.root_module.addOptions("opts", build_opts);
+
+    const run_all_cmd = b.addRunArtifact(all_days);
+    if (b.args) |args| {
+        run_all_cmd.addArgs(args);
+    }
+    run_all.dependOn(&run_all_cmd.step);
+    const install_run_all_step = b.step("install_run_all", "Install run all days");
+    const install_run_all = b.addInstallArtifact(all_days, .{});
+    install_run_all_step.dependOn(&install_run_all.step);
 }
