@@ -4,6 +4,7 @@ alias t := test
 alias m := measure
 alias b := bench
 
+alias ta := test-all
 alias ma := measure-all
 alias ba := bench-all
 
@@ -16,6 +17,9 @@ day DAY=shell('date +%-d'):
 
 test DAY=shell('date +%-d'):
     watchexec zig build test_day{{DAY}}
+
+test-all:
+    watchexec zig build test
 
 measure DAY=shell('date +%-d'):
     @zig build -Dbench -Doptimize=ReleaseFast day{{DAY}} >/dev/null 2>/dev/null
