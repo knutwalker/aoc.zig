@@ -39,8 +39,7 @@ pub fn main() !void {
 const Parsed = u.StrGrid;
 
 pub fn parse(input: Str) !Parsed {
-    const row_len = (u.indexOf(u8, input, '\n') orelse unreachable) + 1;
-    return .{ .input = input, .row_len = @intCast(row_len) };
+    return Parsed.fromInput(input, '\n');
 }
 
 const Output = u32;

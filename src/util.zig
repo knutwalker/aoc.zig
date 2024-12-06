@@ -120,7 +120,23 @@ pub const FindChars = struct {
 };
 
 pub const Axis = enum { x, y };
-pub const Dir = enum(i2) { forward = 1, backward = -1 };
+pub const Dir = enum(i2) {
+    forward = 1,
+    backward = -1,
+
+    pub fn reverse(self: Dir) Dir {
+        return switch (self) {
+            .forward => .backward,
+            .backward => .forward,
+        };
+    }
+
+    pub fn reverse2d(self: Dir2d) Dir2d {
+        return .{ self[0], self[1].backward() };
+    }
+};
+
+pub const Dir2d = struct { Axis, Dir };
 pub const Kind = enum { straight, diagonal };
 
 pub const LineConfig = struct {
@@ -141,14 +157,21 @@ pub const LineOpts = struct {
     }
 };
 
-pub const StrGrid = Grid(u8);
+pub const StrGrid = Grid(u8, false);
 
-pub fn Grid(comptime T: type) type {
+pub fn Grid(comptime T: type, comptime mutable: bool) type {
     return struct {
-        input: []const T,
+        const Slice = if (mutable) []T else []const T;
+
+        input: Slice,
         row_len: isize,
 
         const Self = @This();
+
+        pub fn fromInput(input: Slice, comptime sentinel: T) Self {
+            const row_len = (indexOf(T, input, sentinel) orelse unreachable) + 1;
+            return .{ .input = input, .row_len = @intCast(row_len) };
+        }
 
         pub fn lines(
             self: *const Self,
@@ -165,6 +188,14 @@ pub fn Grid(comptime T: type) type {
                 idx += 1;
             };
             return buf;
+        }
+
+        pub fn charsFrom(self: *const Self, start: usize, cfg: LineConfig) Chars {
+            return self.chars(start, cfg.kind, cfg.axis, cfg.dir);
+        }
+
+        pub fn chars2d(self: *const Self, start: usize, kind: Kind, dir2d: Dir2d) Chars {
+            return self.chars(start, kind, dir2d[0], dir2d[1]);
         }
 
         pub fn chars(self: *const Self, start: usize, kind: Kind, axis: Axis, dir: Dir) Chars {
