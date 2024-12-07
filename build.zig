@@ -42,6 +42,11 @@ pub fn build(b: *Build) void {
     run_generate.setCwd(b.path("")); // This could probably be done in a more idiomatic way
     generate.dependOn(&run_generate.step);
 
+    // zls: check {{{
+    const check_step = b.step("check", "Check if the project compiles");
+    const host_target = b.resolveTargetQuery(.{});
+    // }}}
+
     // Set up an exe for each day
     var has_day: [26]bool = undefined;
     var day: u32 = 1;
@@ -96,6 +101,28 @@ pub fn build(b: *Build) void {
             const step_desc = b.fmt("Install tests in {s}", .{zigFile});
             const install_step = b.step(step_key, step_desc);
             install_step.dependOn(&install_test_cmd.step);
+        }
+
+        if (hasInputFile) {
+            const check = b.addStaticLibrary(.{
+                .name = b.fmt("check_{s}", .{dayString}),
+                .root_source_file = b.path(zigFile),
+                .target = host_target,
+                .optimize = .Debug,
+            });
+            linkObject(b, check);
+            check.root_module.addOptions("opts", build_opts);
+
+            const check_tests = b.addTest(.{
+                .root_source_file = b.path(zigFile),
+                .target = host_target,
+                .optimize = .Debug,
+            });
+            linkObject(b, check_tests);
+            check_tests.root_module.addOptions("opts", build_opts);
+
+            check_step.dependOn(&check.step);
+            check_step.dependOn(&check_tests.step);
         }
 
         const run_cmd = b.addRunArtifact(exe);
