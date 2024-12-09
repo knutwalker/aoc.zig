@@ -43,6 +43,9 @@ pub const sort = std.sort.block;
 pub const asc = std.sort.asc;
 pub const desc = std.sort.desc;
 
+pub const maxInt = std.math.maxInt;
+pub const minInt = std.math.minInt;
+
 pub const ws = std.ascii.whitespace;
 
 pub fn sortAsc(items: anytype) void {
@@ -63,6 +66,10 @@ pub fn AbsDiff(comptime T: type) type {
 
 pub fn eql(lhs: Str, rhs: Str) bool {
     return mem.eql(u8, lhs, rhs);
+}
+
+pub fn equals(lhs: anytype, rhs: @TypeOf(lhs)) bool {
+    return std.meta.eql(lhs, rhs);
 }
 
 pub fn strip(str: Str) Str {
