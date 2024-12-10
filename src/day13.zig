@@ -47,12 +47,12 @@ pub fn parse(input: Str) !Parsed {
 const Output = i64;
 
 pub fn part1(input: Parsed) !?Output {
-    _ = input;
+    _ = input; //autofix
     return null;
 }
 
 pub fn part2(input: Parsed) !?Output {
-    _ = input;
+    _ = input; //autofix
     return null;
 }
 
