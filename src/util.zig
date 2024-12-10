@@ -64,6 +64,18 @@ pub fn AbsDiff(comptime T: type) type {
     return std.meta.Int(.signed, Int.bits + 1);
 }
 
+pub fn sum(comptime T: type, nums: anytype) T {
+    var res: T = 0;
+    for (nums) |num| res += num;
+    return res;
+}
+
+pub fn prod(comptime T: type, nums: anytype) T {
+    var res: T = 1;
+    for (nums) |num| res *= num;
+    return res;
+}
+
 pub fn eql(lhs: Str, rhs: Str) bool {
     return mem.eql(u8, lhs, rhs);
 }
@@ -89,6 +101,66 @@ pub fn splitAtNext(needle: Str, haystack: Str) ?struct { Str, Str } {
 pub fn skipToNext(needle: Str, haystack: Str) ?Str {
     _, const suffix = splitAtNext(needle, haystack) orelse return null;
     return suffix;
+}
+
+pub fn splitFirst(comptime T: type, slice: []const T) struct { T, []const T } {
+    assert(slice.len > 0);
+    return .{ slice[0], slice[1..] };
+}
+
+pub fn trySplitFirst(comptime T: type, slice: []const T) ?struct { T, []const T } {
+    if (slice.len == 0) return null;
+    return splitFirst(T, slice);
+}
+
+pub fn splitLast(comptime T: type, slice: []const T) struct { []const T, T } {
+    assert(slice.len > 0);
+    return .{ slice[0 .. slice.len - 1], slice[slice.len - 1] };
+}
+
+pub fn trySplitLast(comptime T: type, slice: []const T) ?struct { []const T, T } {
+    if (slice.len == 0) return null;
+    return splitLast(T, slice);
+}
+
+pub fn splitAt(comptime T: type, slice: []const T, index: usize) struct { []const T, []const T } {
+    assert(slice.len >= index);
+    return .{ slice[0..index], slice[index..] };
+}
+
+pub fn trySplitAt(comptime T: type, slice: []const T, index: usize) ?struct { []const T, []const T } {
+    if (slice.len < index) return null;
+    return splitAt(T, slice, index);
+}
+
+pub fn splitFirstMut(comptime T: type, slice: []T) struct { T, []T } {
+    assert(slice.len > 0);
+    return .{ slice[0], slice[1..] };
+}
+
+pub fn trySplitFirstMut(comptime T: type, slice: []T) ?struct { T, []T } {
+    if (slice.len == 0) return null;
+    return splitFirst(T, slice);
+}
+
+pub fn splitLastMut(comptime T: type, slice: []T) struct { []T, T } {
+    assert(slice.len > 0);
+    return .{ slice[0 .. slice.len - 1], slice[slice.len - 1] };
+}
+
+pub fn trySplitLastMut(comptime T: type, slice: []T) ?struct { []T, T } {
+    if (slice.len == 0) return null;
+    return splitLast(T, slice);
+}
+
+pub fn splitAtMut(comptime T: type, slice: []T, index: usize) struct { []T, []T } {
+    assert(slice.len >= index);
+    return .{ slice[0..index], slice[index..] };
+}
+
+pub fn trySplitAtMut(comptime T: type, slice: []T, index: usize) ?struct { []T, []T } {
+    if (slice.len < index) return null;
+    return splitAt(T, slice, index);
 }
 
 pub fn offsetFrom(base: Str, str: Str) usize {
