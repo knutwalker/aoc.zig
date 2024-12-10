@@ -48,7 +48,7 @@ const Output = u32;
 
 pub fn part1(input: Parsed) !?Output {
     var count: Output = 0;
-    var xs = u.findChars(input.input, 'X');
+    var xs = u.findCharsComptime(input.input, .{ .scalar = 'X' });
     const target = "MAS";
     while (xs.next()) |x| {
         var lines = input.lines(x, .{});
@@ -64,7 +64,7 @@ pub fn part1(input: Parsed) !?Output {
 
 pub fn part2(input: Parsed) !?Output {
     var count: Output = 0;
-    var ms = u.findChars(input.input, 'M');
+    var ms = u.findCharsComptime(input.input, .{ .scalar = 'M' });
     const target = "AS";
     while (ms.next()) |m| {
         var lines = input.lines(m, .{ .kind = .diagonal, .axis = .x });

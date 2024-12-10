@@ -180,19 +180,51 @@ pub fn advanceWith(tokens: anytype, op: anytype, needle: Str) @typeInfo(@TypeOf(
     return res;
 }
 
-pub fn findChars(str: Str, needle: u8) FindChars {
+pub const Needle = union(enum) {
+    sequence: []const u8,
+    any: []const u8,
+    scalar: u8,
+    none: []const u8,
+};
+
+pub fn findCharsComptime(str: Str, comptime needle: Needle) FindCharsComptime(needle) {
+    return FindCharsComptime(needle){ .str = str, .pos = 0 };
+}
+
+pub fn FindCharsComptime(comptime needle: Needle) type {
+    return struct {
+        str: Str,
+        pos: usize,
+
+        pub fn next(self: *@This()) ?usize {
+            const pos = switch (needle) {
+                .scalar => |n| mem.indexOfScalarPos(u8, self.str, self.pos, n),
+                .sequence => |n| mem.indexOfPos(u8, self.str, self.pos, n),
+                .any => |n| mem.indexOfAnyPos(u8, self.str, self.pos, n),
+                .none => |n| mem.indexOfNonePos(u8, self.str, self.pos, n),
+            } orelse return null;
+            self.pos = pos + 1;
+            return pos;
+        }
+    };
+}
+
+pub fn findChars(str: Str, needle: Needle) FindChars {
     return .{ .str = str, .needle = needle, .pos = 0 };
 }
 
 pub const FindChars = struct {
     str: Str,
-    needle: u8,
+    needle: Needle,
     pos: usize,
 
     pub fn next(self: *FindChars) ?usize {
-        const pos =
-            mem.indexOfScalarPos(u8, self.str, self.pos, self.needle) orelse
-            return null;
+        const pos = switch (self.needle) {
+            .scalar => |n| mem.indexOfScalarPos(u8, self.str, self.pos, n),
+            .sequence => |n| mem.indexOfPos(u8, self.str, self.pos, n),
+            .any => |n| mem.indexOfAnyPos(u8, self.str, self.pos, n),
+            .none => |n| mem.indexOfNonePos(u8, self.str, self.pos, n),
+        } orelse return null;
         self.pos = pos + 1;
         return pos;
     }
