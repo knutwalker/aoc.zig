@@ -1,3 +1,4 @@
+// prelude {{{
 pub const std = @import("std");
 pub const Alloc = std.mem.Allocator;
 pub const List = std.ArrayList;
@@ -35,6 +36,7 @@ pub fn main() !void {
         std.io.getStdOut().writer().print("{}\n", .{res}) catch {};
     }
 }
+// }}}
 
 const max_node = 100;
 const Node = u.math.IntFittingRange(0, max_node);

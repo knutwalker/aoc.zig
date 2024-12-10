@@ -1,3 +1,4 @@
+// prelude {{{
 pub const std = @import("std");
 pub const Alloc = std.mem.Allocator;
 pub const List = std.ArrayList;
@@ -35,6 +36,7 @@ pub fn main() !void {
         std.io.getStdOut().writer().print("{}\n", .{res}) catch {};
     }
 }
+// }}}
 
 const Parsed = struct { g: u.StrGrid, start: Pos };
 
