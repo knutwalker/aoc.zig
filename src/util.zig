@@ -361,6 +361,49 @@ pub fn Grid(comptime T: type, comptime mutable: bool) type {
                 return false;
             }
         };
+
+        pub fn spots(self: *const Self, a: usize, b: usize) Spots {
+            const ib = @as(isize, @intCast(b));
+            const stride = ib - @as(isize, @intCast(a));
+
+            const row_len = @as(usize, @intCast(self.row_len));
+
+            const a_x = a / row_len;
+            const b_x = b / row_len;
+
+            const dx: usize = @intCast(absDiff(a_x, b_x));
+
+            return .{ .grid = self, .pos = b, .stride = stride, .dx = dx };
+        }
+
+        pub const Spots = struct {
+            grid: *const Self,
+            pos: usize,
+            stride: isize,
+            dx: usize,
+
+            pub fn next(self: *Spots) ?T {
+                const ipos = @as(isize, @intCast(self.pos)) + self.stride;
+
+                // top boundary
+                const new_pos = math.cast(usize, ipos) orelse return null;
+
+                // bottom boundary
+                if (new_pos >= self.grid.input.len) return null;
+
+                // spots in directly in the left/right boundary
+                const row_len = @as(usize, @intCast(self.grid.row_len));
+                if (new_pos % (row_len) == row_len - 1) return null;
+
+                // left/right boundary
+                const x_a = self.pos / row_len;
+                const x_b = new_pos / row_len;
+                if (absDiff(x_a, x_b) != self.dx) return null;
+
+                self.pos = new_pos;
+                return self.grid.input[new_pos];
+            }
+        };
     };
 }
 
