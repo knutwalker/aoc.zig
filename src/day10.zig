@@ -38,38 +38,95 @@ pub fn main() !void {
 }
 // }}}
 
-const Parsed = Str;
+const Grid = u.StrGrid;
 
-pub fn parse(input: Str) !Parsed {
-    return input;
+pub fn parse(input: Str) !Grid {
+    return Grid.fromInput(input, '\n');
 }
 
-const Output = i64;
+const Output = u64;
 
-pub fn part1(input: Parsed) !?Output {
-    _ = input; //autofix
-    return null;
+pub fn part1(input: Grid) !?Output {
+    var sum: Output = 0;
+    var starts = u.findCharsComptime(input.input, .{ .scalar = '0' });
+    while (starts.next()) |start| sum += start_hike(&input, start);
+    return sum;
 }
 
-pub fn part2(input: Parsed) !?Output {
-    _ = input; //autofix
-    return null;
+fn start_hike(g: *const Grid, start: usize) Output {
+    var reached = BitSet.initEmpty(a, g.input.len) catch @panic("oom");
+    defer reached.deinit();
+
+    hike(g, start, '1', &reached);
+    return reached.count();
+}
+
+fn hike(g: *const Grid, start: usize, comptime next_level: u8, reached: *BitSet) void {
+    const dirs = g.neighbors(start, .{ .kind = .straight });
+    for (dirs.constSlice()) |n| {
+        if (g.input[n] == next_level) {
+            if (next_level == '9') {
+                reached.set(n);
+            } else {
+                hike(g, n, next_level + 1, reached);
+            }
+        }
+    }
+}
+
+pub fn part2(input: Grid) !?Output {
+    var sum: Output = 0;
+    var starts = u.findCharsComptime(input.input, .{ .scalar = '0' });
+    while (starts.next()) |start| sum += start_hike2(&input, start);
+    return sum;
+}
+
+fn start_hike2(g: *const Grid, start: usize) Output {
+    var rank: u32 = 1;
+    hike2(g, start, '1', &rank);
+    return rank;
+}
+
+fn hike2(g: *const Grid, start: usize, comptime next_level: u8, distinct: *u32) void {
+    const dirs = g.neighbors(start, .{ .kind = .straight });
+    var has_path = false;
+    for (dirs.constSlice()) |n| {
+        if (g.input[n] == next_level) {
+            if (!has_path) {
+                has_path = true;
+            } else {
+                distinct.* += 1;
+            }
+            if (next_level != '9') {
+                hike2(g, n, next_level + 1, distinct);
+            }
+        }
+    }
+    if (!has_path) {
+        distinct.* -= 1;
+    }
 }
 
 test "day10 example" {
     const input =
+        \\89010123
+        \\78121874
+        \\87430965
+        \\96549874
+        \\45678903
+        \\32019012
+        \\01329801
+        \\10456732
         \\
     ;
 
     const in = try parse(input);
-    try std.testing.expectEqual(null, try part1(in));
-    try std.testing.expectEqual(null, try part2(in));
+    try std.testing.expectEqual(36, try part1(in));
+    try std.testing.expectEqual(81, try part2(in));
 }
 
 test "day10 input" {
-    if ("remove_this_when_ready".len > 0) return error.SkipZigTest;
-
     const in = try parse(day_input);
-    try std.testing.expectEqual(null, try part1(in));
-    try std.testing.expectEqual(null, try part2(in));
+    try std.testing.expectEqual(624, try part1(in));
+    try std.testing.expectEqual(1483, try part2(in));
 }
