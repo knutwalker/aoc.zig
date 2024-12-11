@@ -284,19 +284,31 @@ pub fn Grid(comptime T: type, comptime mutable: bool) type {
             return .{ .input = input, .row_len = @intCast(row_len) };
         }
 
-        pub fn lines(
+        fn getFrom(self: *const Self, pos: usize, cfg: LineConfig) ?usize {
+            return self.get(pos, cfg.kind, cfg.axis, cfg.dir);
+        }
+
+        fn get2d(self: *const Self, pos: usize, kind: Kind, dir: Dir2d) ?usize {
+            return self.get(pos, kind, dir[0], dir[1]);
+        }
+
+        fn get(self: *const Self, pos: usize, kind: Kind, axis: Axis, dir: Dir) ?usize {
+            var l = self.line(pos, kind, axis, dir);
+            _ = l.next() orelse return null;
+            return l.pos;
+        }
+
+        pub fn neighbors(
             self: *const Self,
             start: usize,
             comptime filter: LineOpts,
-        ) [filter.combinations()]Line {
+        ) std.BoundedArray(usize, filter.combinations()) {
             const kinds = comptime if (filter.kind) |k| &.{k} else meta.tags(Kind);
             const axis = comptime if (filter.axis) |a| &.{a} else meta.tags(Axis);
             const dir = comptime if (filter.dir) |d| &.{d} else meta.tags(Dir);
-            var buf: [filter.combinations()]Line = undefined;
-            var idx: usize = 0;
+            var buf = std.BoundedArray(usize, filter.combinations()){};
             inline for (kinds) |k| inline for (axis) |a| inline for (dir) |d| {
-                buf[idx] = self.line(start, k, a, d);
-                idx += 1;
+                if (self.get(start, k, a, d)) |p| buf.appendAssumeCapacity(p);
             };
             return buf;
         }
@@ -327,6 +339,23 @@ pub fn Grid(comptime T: type, comptime mutable: bool) type {
                 .stride = stride,
                 .config = .{ .kind = kind, .axis = axis, .dir = dir },
             };
+        }
+
+        pub fn lines(
+            self: *const Self,
+            start: usize,
+            comptime filter: LineOpts,
+        ) [filter.combinations()]Line {
+            const kinds = comptime if (filter.kind) |k| &.{k} else meta.tags(Kind);
+            const axis = comptime if (filter.axis) |a| &.{a} else meta.tags(Axis);
+            const dir = comptime if (filter.dir) |d| &.{d} else meta.tags(Dir);
+            var buf: [filter.combinations()]Line = undefined;
+            var idx: usize = 0;
+            inline for (kinds) |k| inline for (axis) |a| inline for (dir) |d| {
+                buf[idx] = self.line(start, k, a, d);
+                idx += 1;
+            };
+            return buf;
         }
 
         pub const Line = struct {
