@@ -117,7 +117,7 @@ fn walk(
         @panic("starting at a block, aren't you");
     }
 
-    var line = grid.chars2d(start.pos, .straight, directions[start.dir]);
+    var line = grid.line2d(start.pos, .straight, directions[start.dir]);
     var pos = start;
 
     while (true) {
@@ -127,7 +127,7 @@ fn walk(
 
         if (nxt == '#' or line.pos == block) {
             pos.dir +%= 1;
-            line = grid.chars2d(pos.pos, .straight, directions[pos.dir]);
+            line = grid.line2d(pos.pos, .straight, directions[pos.dir]);
             continue;
         }
 

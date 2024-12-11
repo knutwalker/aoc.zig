@@ -84,16 +84,16 @@ pub fn part2(input: Parsed) !?Output {
     return count;
 }
 
-fn crossLines(grid: *const Parsed, m: usize, dir: u.Dir) [2]Parsed.Chars {
+fn crossLines(grid: *const Parsed, m: usize, dir: u.Dir) [2]Parsed.Line {
     const row_len = @as(usize, @intCast(grid.row_len));
     return switch (dir) {
         .forward => .{
-            grid.chars(m + (2 * row_len), .diagonal, .y, .forward),
-            grid.chars(m + 2, .diagonal, .y, .backward),
+            grid.line(m + (2 * row_len), .diagonal, .y, .forward),
+            grid.line(m + 2, .diagonal, .y, .backward),
         },
         .backward => .{
-            grid.chars(m - 2, .diagonal, .y, .forward),
-            grid.chars(m - (2 * row_len), .diagonal, .y, .backward),
+            grid.line(m - 2, .diagonal, .y, .forward),
+            grid.line(m - (2 * row_len), .diagonal, .y, .backward),
         },
     };
 }

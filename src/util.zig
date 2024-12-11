@@ -288,28 +288,28 @@ pub fn Grid(comptime T: type, comptime mutable: bool) type {
             self: *const Self,
             start: usize,
             comptime filter: LineOpts,
-        ) [filter.combinations()]Chars {
+        ) [filter.combinations()]Line {
             const kinds = comptime if (filter.kind) |k| &.{k} else meta.tags(Kind);
             const axis = comptime if (filter.axis) |a| &.{a} else meta.tags(Axis);
             const dir = comptime if (filter.dir) |d| &.{d} else meta.tags(Dir);
-            var buf: [filter.combinations()]Chars = undefined;
+            var buf: [filter.combinations()]Line = undefined;
             var idx: usize = 0;
             inline for (kinds) |k| inline for (axis) |a| inline for (dir) |d| {
-                buf[idx] = self.chars(start, k, a, d);
+                buf[idx] = self.line(start, k, a, d);
                 idx += 1;
             };
             return buf;
         }
 
-        pub fn charsFrom(self: *const Self, start: usize, cfg: LineConfig) Chars {
-            return self.chars(start, cfg.kind, cfg.axis, cfg.dir);
+        pub fn lineFrom(self: *const Self, start: usize, cfg: LineConfig) Line {
+            return self.line(start, cfg.kind, cfg.axis, cfg.dir);
         }
 
-        pub fn chars2d(self: *const Self, start: usize, kind: Kind, dir2d: Dir2d) Chars {
-            return self.chars(start, kind, dir2d[0], dir2d[1]);
+        pub fn line2d(self: *const Self, start: usize, kind: Kind, dir2d: Dir2d) Line {
+            return self.line(start, kind, dir2d[0], dir2d[1]);
         }
 
-        pub fn chars(self: *const Self, start: usize, kind: Kind, axis: Axis, dir: Dir) Chars {
+        pub fn line(self: *const Self, start: usize, kind: Kind, axis: Axis, dir: Dir) Line {
             const d = @intFromEnum(dir);
             const stride = switch (kind) {
                 .straight => switch (axis) {
@@ -329,23 +329,30 @@ pub fn Grid(comptime T: type, comptime mutable: bool) type {
             };
         }
 
-        pub const Chars = struct {
+        pub const Line = struct {
             grid: *const Self,
             pos: usize,
             stride: isize,
             config: LineConfig,
 
-            pub fn next(self: *Chars) ?T {
+            pub fn next(self: *Line) ?T {
                 const ipos = @as(isize, @intCast(self.pos)) + self.stride;
+
+                // top boundary
                 const new_pos = math.cast(usize, ipos) orelse return null;
+
+                // bottom boundary
                 if (new_pos >= self.grid.input.len) return null;
+
+                // left/right boundary
                 const row_len = @as(usize, @intCast(self.grid.row_len));
                 if (new_pos % (row_len) == row_len - 1) return null;
+
                 self.pos = new_pos;
                 return self.grid.input[new_pos];
             }
 
-            pub fn match(self: *Chars, target: []const T) bool {
+            pub fn match(self: *Line, target: []const T) bool {
                 var idx: usize = 0;
                 while (self.next()) |c| : (idx += 1) {
                     if (c != target[idx]) break;
