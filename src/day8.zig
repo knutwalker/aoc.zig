@@ -38,38 +38,71 @@ pub fn main() !void {
 }
 // }}}
 
-const Parsed = Str;
+const Parsed = u.StrGrid;
 
 pub fn parse(input: Str) !Parsed {
-    return input;
+    return u.StrGrid.fromInput(input, '\n');
 }
 
-const Output = i64;
+const Output = u64;
 
 pub fn part1(input: Parsed) !?Output {
-    _ = input;
-    return null;
+    return solve(input, true);
 }
 
 pub fn part2(input: Parsed) !?Output {
-    _ = input;
-    return null;
+    return solve(input, false);
+}
+
+fn solve(input: Parsed, comptime p1: bool) !?Output {
+    var nodes = try BitSet.initEmpty(a, input.input.len);
+
+    var antennas = u.findCharsComptime(input.input, .{ .none = ".\n" });
+    while (antennas.next()) |pos| {
+        const antenna = input.input[pos];
+        if (comptime !p1) nodes.set(pos);
+
+        var siblings = u.findChars(input.input[pos + 1 ..], .{ .scalar = antenna });
+        while (siblings.next()) |ns| {
+            const sibling = ns + pos + 1;
+            if (comptime !p1) nodes.set(sibling);
+
+            inline for (.{ .{ &input, pos, sibling }, .{ &input, sibling, pos } }) |args| {
+                var spots = @call(.auto, u.StrGrid.spots, args);
+                while (spots.next()) |_| {
+                    nodes.set(spots.pos);
+                    if (comptime p1) break;
+                }
+            }
+        }
+    }
+
+    return nodes.count();
 }
 
 test "day8 example" {
     const input =
-        \\
+        \\............
+        \\........0...
+        \\.....0......
+        \\.......0....
+        \\....0.......
+        \\......A.....
+        \\............
+        \\............
+        \\........A...
+        \\.........A..
+        \\............
+        \\............
     ;
 
     const in = try parse(input);
-    try std.testing.expectEqual(null, try part1(in));
-    try std.testing.expectEqual(null, try part2(in));
+    try std.testing.expectEqual(14, try part1(in));
+    try std.testing.expectEqual(34, try part2(in));
 }
 
 test "day8 input" {
-    if ("remove_this_when_ready".len > 0) return error.SkipZigTest;
-
     const in = try parse(day_input);
-    try std.testing.expectEqual(null, try part1(in));
-    try std.testing.expectEqual(null, try part2(in));
+    try std.testing.expectEqual(305, try part1(in));
+    try std.testing.expectEqual(1150, try part2(in));
 }
