@@ -214,10 +214,7 @@ test "day6 example" {
 }
 
 test "day6 input" {
-    // if ("remove_this_when_ready".len > 0) return error.SkipZigTest;
-
     const in = try parse(day_input);
     try std.testing.expectEqual(5095, try part1(in));
     try std.testing.expectEqual(1933, try part2(in));
-    // try std.testing.expectEqual(.gt, u.math.order((try part2(in)).?, 396));
 }
