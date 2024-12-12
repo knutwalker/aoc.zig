@@ -834,66 +834,37 @@ pub fn BoundedMeasure(max_snapshots: comptime_int) type {
 
         const Snap = struct {
             label: []const u8,
-            usage: std.posix.rusage,
             heap: usize,
+            rss: u64,
             wall: u64,
             size: ?u64,
 
             fn take(label: []const u8, timer: *std.time.Timer) Snap {
                 return .{
                     .label = label,
-                    .usage = std.posix.getrusage(std.posix.rusage.SELF),
                     .heap = gpa_impl.queryCapacity(),
+                    .rss = @intCast(std.posix.getrusage(std.posix.rusage.SELF).maxrss),
                     .wall = timer.read(),
                     .size = null,
                 };
             }
 
             fn diff(lhs: Snap, rhs: Snap, label: ?[]const u8) Usage {
-                const user_time = utime: {
-                    var after: u64 = @intCast(rhs.usage.utime.tv_sec);
-                    after *|= std.time.us_per_s;
-                    after +|= @intCast(rhs.usage.utime.tv_usec);
-
-                    var before: u64 = @intCast(lhs.usage.utime.tv_sec);
-                    before *|= std.time.us_per_s;
-                    before +|= @intCast(lhs.usage.utime.tv_usec);
-
-                    break :utime (after -| before) *| std.time.ns_per_us;
-                };
-
-                const system_time = stime: {
-                    var after: u64 = @intCast(rhs.usage.stime.tv_sec);
-                    after *|= std.time.us_per_s;
-                    after +|= @intCast(rhs.usage.stime.tv_usec);
-
-                    var before: u64 = @intCast(lhs.usage.stime.tv_sec);
-                    before *|= std.time.us_per_s;
-                    before +|= @intCast(lhs.usage.stime.tv_usec);
-
-                    break :stime (after -| before) *| std.time.ns_per_us;
-                };
-
-                const rss =
-                    @as(u64, @intCast(rhs.usage.maxrss)) -|
-                    @as(u64, @intCast(lhs.usage.maxrss));
-
+                const rss = rhs.rss -| lhs.rss;
                 const heap = rhs.heap -| lhs.heap;
                 const wall_time = rhs.wall -| lhs.wall;
 
-                const thrpt = if (rhs.size) |size| b: {
+                const thrpt = if (rhs.size) |size| thrpt: {
                     const secs =
                         @as(f64, @floatFromInt(wall_time)) /
                         @as(f64, @floatFromInt(std.time.ns_per_s));
                     const tp = @as(f64, @floatFromInt(size)) / secs;
-                    break :b @as(u64, @intFromFloat(@round(tp)));
+                    break :thrpt @as(u64, @intFromFloat(@round(tp)));
                 } else null;
 
                 return .{
                     .label = label orelse rhs.label,
                     .wall_time_ns = wall_time,
-                    .user_time_ns = user_time,
-                    .system_time_ns = system_time,
                     .heap_bytes = heap,
                     .rss_bytes = rss,
                     .throughput = thrpt,
@@ -904,8 +875,6 @@ pub fn BoundedMeasure(max_snapshots: comptime_int) type {
         const Usage = struct {
             label: []const u8,
             wall_time_ns: u64,
-            user_time_ns: u64,
-            system_time_ns: u64,
             heap_bytes: u64,
             rss_bytes: u64,
             throughput: ?u64,
@@ -937,24 +906,20 @@ pub fn BoundedMeasure(max_snapshots: comptime_int) type {
             ) !void {
                 try writer.print(
                     \\Usage for {s}:
-                    \\     {s: >16} wall time
-                    \\     {s: >16} user time
-                    \\     {s: >16} system time
-                    \\     {s: >16.9} heap memory usage
-                    \\     {s: >16.9} resident memory usage
+                    \\     {s: >12} wall time
+                    \\     {s: >12.3} heap memory usage
+                    \\     {s: >12.3} resident memory usage
                     \\
                 , .{
                     self.label,
                     std.fmt.fmtDuration(self.wall_time_ns),
-                    std.fmt.fmtDuration(self.user_time_ns),
-                    std.fmt.fmtDuration(self.system_time_ns),
                     std.fmt.fmtIntSizeBin(self.heap_bytes),
                     std.fmt.fmtIntSizeBin(self.rss_bytes),
                 });
 
                 if (self.throughput) |t| {
                     try writer.print(
-                        \\     {s: >16.9} throughput (per second)
+                        \\     {s: >12.3} throughput (per second)
                         \\
                     , .{
                         std.fmt.fmtIntSizeBin(t),

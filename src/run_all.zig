@@ -9,47 +9,47 @@ pub fn main() !void {
 
     if (comptime opts.has_input[1]) {
         try @import("./day1.zig").main();
-        measure.lap("day 1");
+        measure.lap("day 01");
     }
 
     if (comptime opts.has_input[2]) {
         try @import("./day2.zig").main();
-        measure.lap("day 2");
+        measure.lap("day 02");
     }
 
     if (comptime opts.has_input[3]) {
         try @import("./day3.zig").main();
-        measure.lap("day 3");
+        measure.lap("day 03");
     }
 
     if (comptime opts.has_input[4]) {
         try @import("./day4.zig").main();
-        measure.lap("day 4");
+        measure.lap("day 04");
     }
 
     if (comptime opts.has_input[5]) {
         try @import("./day5.zig").main();
-        measure.lap("day 5");
+        measure.lap("day 05");
     }
 
     if (comptime opts.has_input[6]) {
         try @import("./day6.zig").main();
-        measure.lap("day 6");
+        measure.lap("day 06");
     }
 
     if (comptime opts.has_input[7]) {
         try @import("./day7.zig").main();
-        measure.lap("day 7");
+        measure.lap("day 07");
     }
 
     if (comptime opts.has_input[8]) {
         try @import("./day8.zig").main();
-        measure.lap("day 8");
+        measure.lap("day 08");
     }
 
     if (comptime opts.has_input[9]) {
         try @import("./day9.zig").main();
-        measure.lap("day 9");
+        measure.lap("day 09");
     }
 
     if (comptime opts.has_input[10]) {
